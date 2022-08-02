@@ -110,70 +110,33 @@ def app():
     st.markdown("##")
     st.markdown("##")
     
+    #Sorted Bar Chart to show all subagents in decreasing order of more revenue from overrides
     
-    #Array to hold all unique sug agents      
-    agencys = []
-    #Array to hold all unique sug agent codes     
-    agencycodes = []
-    #Append all unique sub agents to above array
+    sortedBarAgencies = []
+    sortedBarTotals = []
+
     for agency in result:
-        agencys.append(agency[1])
-        agencycodes.append(agency[3])
-    
-    df2subagents = []
-    df2month = []
-    df2totalOR = []
-    
-    #Graph and Dataframe to show revenue from each subagent over the months
-    for month in months:
-        for agency in agencys:
-            #Query to look for all transactions for the specific month 
-            mainDBcursor.execute("select month, agency_name, override_amount from overriderevenue where month=? and agency_name=?", (month, agency))
-            agencyMonthOR = mainDBcursor.fetchall();    
-            
-            agencyMonthORArray = []
-            for override in agencyMonthOR:
-                agencyMonthORArray.append(override[2])
-            
-            df2subagents.append(agency)
-            df2month.append(month)
-            df2totalOR.append(round(sum(agencyMonthORArray), 2))
-    
-    
-      
-    subAgentsMonthlyORDf = pd.DataFrame({'Agency': df2subagents, 'Month': df2month, 'OverrideAmt': df2totalOR}, columns=['Agency', 'Month', 'OverrideAmt'])  
-    
-    #Line Chart to display dataframe
-    carrierLineChart = alt.Chart(subAgentsMonthlyORDf).mark_line().encode(y= alt.Y( 'OverrideAmt', title='Total Revenue'), x= alt.X( 'Month', title='Month'), color='Agency').properties(title="Sub Agent Override Revenue").configure_title(fontSize=23).configure_axis(titleFontSize=16, labelFontSize=14, titlePadding=15, labelPadding=10).configure_axisBottom(labelAngle=360)
-    st.altair_chart(carrierLineChart, use_container_width=True)
-    
-    #st.write(subAgentsMonthlyORDf.style.format({'OverrideAmt': '{:.2f}'}))
-    
-    st.markdown("##")
-    st.markdown("##")
-    
-    dfAgencyName = []
-    dfTier = []
-    dfRocketCode = []
-    dfAgencyTotalOR = []
-    
-    for agency in result:
-        dfAgencyName.append(agency[1])
-        dfTier.append(agency[2])
-        dfRocketCode.append(agency[3])
-        
-        #Get all override amounts from OverrideRevenue Table
-        mainDBcursor.execute("select id, rocket_code, override_amount from overriderevenue where rocket_code=?", (agency[3],))
+        mainDBcursor.execute("select agency_name, rocket_code, override_amount from overriderevenue where rocket_code=?", (agency[3],))
         agencyOverrideAmounts = mainDBcursor.fetchall();
         
-        dfAgencyORArray = []
-        #Array of all overrides for agency to sum and get total
-        for item in agencyOverrideAmounts:
-            dfAgencyORArray.append(item[2])
+        #Array that holds all the overrides for the current agency
+        agencyTotalArray = []
+        #Append each override for the agency to the above array
+        for override in agencyOverrideAmounts:
+            agencyTotalArray.append(override[2])
         
-        dfAgencyTotalOR.append(round(sum(dfAgencyORArray), 2))
+        #Append the Agency to sortedBarAgencies
+        sortedBarAgencies.append(agency[1])
+        #Append the total of the agency override to sortedBarTotals
+        sortedBarTotals.append(round(sum(agencyTotalArray), 2)) 
         
-    #Dataframe based on the above arrays to use in the Chart
-    carrierDf = pd.DataFrame({'Agency Name': dfAgencyName, 'Tier': dfTier, 'Rocket Code': dfRocketCode, 'Total Override': dfAgencyTotalOR}, columns=['Agency Name', 'Tier', 'Rocket Code', 'Total Override'])
-            
-    #st.dataframe(carrierDf.style.format({'Total Override': '{:.2f}'}))
+    
+    agencySortedBarDf = pd.DataFrame({"Agency": sortedBarAgencies, "Total": sortedBarTotals})
+    
+    sortedBarDataCol1, sortedBarDataCol2 = st.columns([3, 1])
+    
+    with sortedBarDataCol1:
+        agencySortedBar = alt.Chart(agencySortedBarDf).mark_bar().encode(x=alt.X('Total:Q', title='Total Override Revenue'), y=alt.Y('Agency:N', sort='-x')).properties(title="Sub Agent Total Override Revenue").configure_title(fontSize=23).configure_axis(titleFontSize=16, labelFontSize=14, titlePadding=15, labelPadding=10)
+        st.altair_chart(agencySortedBar, use_container_width=True)
+    with sortedBarDataCol2:
+        st.write(agencySortedBarDf.sort_values(by=['Total'], ascending=False).style.format({'Total': '{:.2f}'}))

@@ -136,34 +136,52 @@ def app():
                 agency_line_chart = alt.Chart(agencyChartDf).mark_line().encode(y= alt.Y( 'Revenue', title='Total Revenue'), x= alt.X( 'Month', title='Month')).properties(title="Total Override Revenue").configure_title(fontSize=23).configure_axis(titleFontSize=16, labelFontSize=14, titlePadding=15, labelPadding=10).configure_axisBottom(labelAngle=360)
                 st.altair_chart(agency_line_chart, use_container_width=True)
             with dataCol2:
-                st.write(agencyChartDf.style.format({'Revenue': '{:.2f}'}))
+                st.write(agencyChartDf.sort_values(by=['Month'], ascending=False).style.format({'Revenue': '{:.2f}'}))
 
             st.markdown("##")
             
-            #Get all override amounts from OverrideRevenue Table
-            mainDBcursor.execute("select month, carrier_name, rocket_code, override_amount from overriderevenue where rocket_code=?", (agency[3],))
-            agencyCarrierOverrideAmounts = mainDBcursor.fetchall();
+            pieChartCarriers = []
+            pieChartCarrierTotals = []
             
-            #Array to hold the Months in the above dataframe
-            carrierDfMonth = []
-            #Array to hold the Carrier in the above dataframe
-            carrierDfCarrier = []
-            #Array to hold the Overrides in the above dataframe
-            carrierDfOR = []
+            #Get all the list of unique months in the Override Revenue Table
+            mainDBcursor.execute("select distinct carrier_name from overriderevenue where rocket_code=?", (agency[3],))
+            agencyCarrierList = mainDBcursor.fetchall();
             
-            #For loop to append values from query to above arrays
-            for item in agencyCarrierOverrideAmounts:
-                carrierDfMonth.append(item[0])
-                carrierDfCarrier.append(item[1])
-                carrierDfOR.append(item[3])
+            #Array to hold unique Carriers 
+            agencyuniqueCarriers = []
+            #For loop to append carriers without extra characters to above array
+            for item in agencyCarrierList:
+                carrierC = str(item).replace("'", "").replace(",", "").replace("(", "").replace(")", "")
+                agencyuniqueCarriers.append(carrierC)   
+                
+            for carrier in agencyuniqueCarriers:
+                #Get all override amounts from OverrideRevenue Table for agency with specific carrier 
+                mainDBcursor.execute("select carrier_name, rocket_code, override_amount from overriderevenue where rocket_code=? and carrier_name=?", (agency[3], carrier))
+                agencyCarrierOR = mainDBcursor.fetchall();
+                
+                #Array that holds all the overrides for the current carrier
+                carrierTotalArray = []
+                #Append each override for the carrier to the above array
+                for override in agencyCarrierOR:
+                    carrierTotalArray.append(override[2])
+                    
+                #Append the Carrier to pieChartCarriers
+                pieChartCarriers.append(carrier)
+                #Append the total of the carrier override to pieChartCarrierTotals
+                pieChartCarrierTotals.append(round(sum(carrierTotalArray), 2))  
             
-            #Dataframe based on the above arrays to use in the Chart
-            agencyCarrierDf = pd.DataFrame({'Month': carrierDfMonth, 'Carrier': carrierDfCarrier, 'OverrideAmt': carrierDfOR}, columns=['Month', 'Carrier', 'OverrideAmt'])
             
-            #Chart showing Override revenue per month per carrier 
-            carrierLineChart = alt.Chart(agencyCarrierDf).mark_line().encode(y= alt.Y( 'OverrideAmt', title='Total Revenue'), x= alt.X( 'Month', title='Month'), color='Carrier').properties(title="Carrier Override Revenue").configure_title(fontSize=23).configure_axis(titleFontSize=16, labelFontSize=14, titlePadding=15, labelPadding=10).configure_axisBottom(labelAngle=360)
-            st.altair_chart(carrierLineChart, use_container_width=True)
-        
+            carrierPieChartDf = pd.DataFrame({"Carrier": pieChartCarriers, "Total": pieChartCarrierTotals})
+            
+            
+            pieDataCol1, pieDataCol2 = st.columns([3, 1])
+            
+            with pieDataCol1:
+                #Pie Chart to display override per carrier
+                carrierPieChart = alt.Chart(carrierPieChartDf).mark_arc().encode(theta=alt.Theta(field="Total", type="quantitative"), color=alt.Color(field="Carrier", type="nominal"))
+                st.altair_chart(carrierPieChart, use_container_width=True)
+            with pieDataCol2:
+                st.write(carrierPieChartDf.sort_values(by=['Total'], ascending=False).style.format({'Total': '{:.2f}'}))
         
         st.markdown("##")    
         st.markdown("---")
